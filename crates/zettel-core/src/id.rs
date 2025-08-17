@@ -324,25 +324,10 @@ pub struct IdManager<F> {
 }
 
 /// Configuration for ID parsing and generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IdConfig {
-    /// Matching rule: "strict", "separator", "fuzzy"
-    pub match_rule: String,
-    /// Separator for "separator" rule
-    pub separator: String,
-    /// Whether to allow Unicode in IDs
-    pub allow_unicode: bool,
-}
-
-impl Default for IdConfig {
-    fn default() -> Self {
-        Self {
-            match_rule: "strict".to_string(),
-            separator: " - ".to_string(),
-            allow_unicode: false,
-        }
-    }
-}
+///
+/// This is now a re-export of the config system's IdConfig to maintain
+/// API compatibility while centralizing configuration management.
+pub use crate::config::IdConfig;
 
 impl<F> IdManager<F>
 where
@@ -549,15 +534,18 @@ mod tests {
         let num = IdComponent::numeric(42);
         assert_eq!(num.as_str(), "42");
         assert!(num.is_numeric());
+        assert!(!num.is_alpha());
 
         let alpha = IdComponent::alpha("abc").unwrap();
         assert_eq!(alpha.as_str(), "abc");
         assert!(alpha.is_alpha());
+        assert!(!alpha.is_numeric());
 
         // Test invalid alpha component
         assert!(IdComponent::alpha("").is_err());
         assert!(IdComponent::alpha("ABC").is_err());
         assert!(IdComponent::alpha("a1b").is_err());
+        assert!(IdComponent::alpha("123").is_err());
     }
 
     #[test]
@@ -566,6 +554,10 @@ mod tests {
         let num = IdComponent::numeric(5);
         let next = num.increment().unwrap();
         assert_eq!(next, IdComponent::numeric(6));
+
+        // Test numeric overflow
+        let max_num = IdComponent::numeric(u32::MAX);
+        assert!(max_num.increment().is_err());
 
         // Alpha increment
         let alpha = IdComponent::alpha("a").unwrap();
@@ -588,6 +580,10 @@ mod tests {
         assert_eq!(increment_alpha_string("az").unwrap(), "ba");
         assert_eq!(increment_alpha_string("zz").unwrap(), "aaa");
         assert_eq!(increment_alpha_string("abc").unwrap(), "abd");
+        assert_eq!(increment_alpha_string("abz").unwrap(), "aca");
+
+        // Test empty string error
+        assert!(increment_alpha_string("").is_err());
     }
 
     #[test]
@@ -596,20 +592,47 @@ mod tests {
         let id = Id::parse("1").unwrap();
         assert_eq!(id.components().len(), 1);
         assert!(id.is_root());
+        assert_eq!(id.depth(), 1);
 
         let id = Id::parse("1a").unwrap();
         assert_eq!(id.components().len(), 2);
         assert!(!id.is_root());
+        assert_eq!(id.depth(), 2);
 
         let id = Id::parse("1a2b3c").unwrap();
         assert_eq!(id.components().len(), 6);
         assert_eq!(id.depth(), 6);
 
+        // Complex IDs
+        let id = Id::parse("42z123a5").unwrap();
+        assert_eq!(id.components().len(), 4);
+        assert_eq!(id.components()[0], IdComponent::numeric(42));
+        assert_eq!(id.components()[1], IdComponent::alpha("z").unwrap());
+        assert_eq!(id.components()[2], IdComponent::numeric(123));
+        assert_eq!(id.components()[3], IdComponent::alpha("a").unwrap());
+
         // Invalid cases
         assert!(Id::parse("").is_err());
         assert!(Id::parse("a").is_err()); // Must start with number
-        assert!(Id::parse("1a2").is_err()); // Must end properly
-        assert!(Id::parse("12a").is_err()); // Invalid pattern
+        assert!(Id::parse("1A").is_err()); // No uppercase letters
+        assert!(Id::parse("1-2").is_err()); // No special characters
+        assert!(Id::parse("1 a").is_err()); // No spaces
+    }
+
+    #[test]
+    fn test_id_display() {
+        let id = Id::parse("1a2b").unwrap();
+        assert_eq!(id.to_string(), "1a2b");
+        assert_eq!(format!("{}", id), "1a2b");
+    }
+
+    #[test]
+    fn test_id_from_str() {
+        let id: Id = "1a2".parse().unwrap();
+        assert_eq!(id.to_string(), "1a2");
+
+        let result: Result<Id, _> = "invalid".parse();
+        assert!(result.is_err());
     }
 
     #[test]
@@ -618,6 +641,7 @@ mod tests {
         let child = Id::parse("1a").unwrap();
         let grandchild = Id::parse("1a2").unwrap();
         let sibling = Id::parse("2").unwrap();
+        let child_sibling = Id::parse("1b").unwrap();
 
         // Parent relationships
         assert_eq!(child.parent().unwrap(), Some(root.clone()));
@@ -628,13 +652,33 @@ mod tests {
         assert!(root.is_ancestor_of(&child));
         assert!(root.is_ancestor_of(&grandchild));
         assert!(child.is_ancestor_of(&grandchild));
+        assert!(!child.is_ancestor_of(&root));
+        assert!(!root.is_ancestor_of(&sibling));
+
         assert!(child.is_descendant_of(&root));
         assert!(grandchild.is_descendant_of(&root));
         assert!(grandchild.is_descendant_of(&child));
+        assert!(!root.is_descendant_of(&child));
 
         // Sibling relationships
         assert!(root.is_sibling_of(&sibling));
+        assert!(child.is_sibling_of(&child_sibling));
         assert!(!root.is_sibling_of(&child));
+        assert!(!child.is_sibling_of(&grandchild));
+    }
+
+    #[test]
+    fn test_ancestors() {
+        let id = Id::parse("1a2b").unwrap();
+        let ancestors = id.ancestors();
+
+        assert_eq!(ancestors.len(), 3);
+        assert_eq!(ancestors[0].to_string(), "1");
+        assert_eq!(ancestors[1].to_string(), "1a");
+        assert_eq!(ancestors[2].to_string(), "1a2");
+
+        let root = Id::parse("1").unwrap();
+        assert_eq!(root.ancestors().len(), 0);
     }
 
     #[test]
@@ -645,57 +689,34 @@ mod tests {
         let sibling = id.next_sibling().unwrap();
         assert_eq!(sibling.to_string(), "1a3");
 
-        // First child
+        // First child follows alternating pattern
         let child = id.first_child();
-        assert_eq!(child.to_string(), "1a2a");
+        assert_eq!(child.to_string(), "1a2a"); // After number comes alpha
 
         // Child of child should be numeric
         let grandchild = child.first_child();
-        assert_eq!(grandchild.to_string(), "1a2a1");
+        assert_eq!(grandchild.to_string(), "1a2a1"); // After alpha comes number
+
+        // Test root ID child
+        let root = Id::parse("1").unwrap();
+        let root_child = root.first_child();
+        assert_eq!(root_child.to_string(), "1a"); // After number comes alpha
     }
 
     #[test]
-    fn test_id_manager_filename_extraction() {
+    fn test_id_from_number() {
+        let id = Id::from_number(42);
+        assert_eq!(id.to_string(), "42");
+        assert!(id.is_root());
+        assert_eq!(id.depth(), 1);
+    }
+
+    #[test]
+    fn test_id_manager_with_default_config() {
         let config = IdConfig::default();
         let manager = IdManager::new(config, |_| false);
 
-        // Test strict matching
-        assert_eq!(
-            manager
-                .extract_from_filename("1a2")
-                .map(|id| id.to_string()),
-            Some("1a2".to_string())
-        );
-        assert_eq!(
-            manager
-                .extract_from_filename("1a2.md")
-                .map(|id| id.to_string()),
-            None // strict mode doesn't match with extension
-        );
-
-        // Test separator matching
-        let config = IdConfig {
-            match_rule: "separator".to_string(),
-            separator: " - ".to_string(),
-            allow_unicode: false,
-        };
-        let manager = IdManager::new(config, |_| false);
-
-        assert_eq!(
-            manager
-                .extract_from_filename("1a2 - My Note.md")
-                .map(|id| id.to_string()),
-            Some("1a2".to_string())
-        );
-
-        // Test fuzzy matching
-        let config = IdConfig {
-            match_rule: "fuzzy".to_string(),
-            separator: "".to_string(),
-            allow_unicode: false,
-        };
-        let manager = IdManager::new(config, |_| false);
-
+        // Test fuzzy matching (default)
         assert_eq!(
             manager
                 .extract_from_filename("1a2_note.md")
@@ -708,39 +729,140 @@ mod tests {
                 .map(|id| id.to_string()),
             Some("1a2".to_string())
         );
+        assert_eq!(
+            manager
+                .extract_from_filename("1a2.md")
+                .map(|id| id.to_string()),
+            Some("1a2".to_string())
+        );
     }
 
     #[test]
-    fn test_id_manager_generation() {
+    fn test_id_manager_strict_matching() {
+        let config = IdConfig {
+            match_rule: "strict".to_string(),
+            separator: " - ".to_string(),
+            allow_unicode: false,
+            max_depth: 10,
+        };
+        let manager = IdManager::new(config, |_| false);
+
+        // Strict mode: exact match only
+        assert_eq!(
+            manager
+                .extract_from_filename("1a2")
+                .map(|id| id.to_string()),
+            Some("1a2".to_string())
+        );
+        assert_eq!(
+            manager.extract_from_filename("1a2.md"),
+            None // strict mode doesn't match with extension
+        );
+        assert_eq!(manager.extract_from_filename("1a2-note.md"), None);
+    }
+
+    #[test]
+    fn test_id_manager_separator_matching() {
+        let config = IdConfig {
+            match_rule: "separator".to_string(),
+            separator: " - ".to_string(),
+            allow_unicode: false,
+            max_depth: 10,
+        };
+        let manager = IdManager::new(config, |_| false);
+
+        assert_eq!(
+            manager
+                .extract_from_filename("1a2 - My Note.md")
+                .map(|id| id.to_string()),
+            Some("1a2".to_string())
+        );
+        assert_eq!(
+            manager
+                .extract_from_filename("1a2 - Another Note Title.md")
+                .map(|id| id.to_string()),
+            Some("1a2".to_string())
+        );
+        // Should not match without separator
+        assert_eq!(manager.extract_from_filename("1a2.md"), None);
+    }
+
+    #[test]
+    fn test_id_manager_generation_with_existing_ids() {
         use std::collections::HashSet;
 
         let mut existing_ids = HashSet::new();
         existing_ids.insert("1".to_string());
         existing_ids.insert("1a".to_string());
         existing_ids.insert("2".to_string());
+        existing_ids.insert("3".to_string());
 
         let config = IdConfig::default();
         let manager = IdManager::new(config, |id: &str| existing_ids.contains(id));
 
-        // Next available sibling of "1" should be "3" (since "2" exists)
+        // Next available sibling of "1" should be "4" (since "2" and "3" exist)
         let current = Id::parse("1").unwrap();
         let next_sibling = manager.next_available_sibling(&current).unwrap();
-        assert_eq!(next_sibling.to_string(), "3");
+        assert_eq!(next_sibling.to_string(), "4");
 
         // Next available child of "1" should be "1b" (since "1a" exists)
         let next_child = manager.next_available_child(&current);
         assert_eq!(next_child.to_string(), "1b");
+
+        // Test with alpha components
+        existing_ids.insert("1b".to_string());
+        existing_ids.insert("1c".to_string());
+        let next_child = manager.next_available_child(&current);
+        assert_eq!(next_child.to_string(), "1d");
+    }
+
+    #[test]
+    fn test_id_validation() {
+        let config = IdConfig::default();
+        let manager = IdManager::new(config, |_| false);
+
+        // Valid IDs
+        assert!(manager.validate_id("1").is_ok());
+        assert!(manager.validate_id("1a").is_ok());
+        assert!(manager.validate_id("1a2b3c").is_ok());
+        assert!(manager.validate_id("42z").is_ok());
+
+        // Invalid IDs
+        assert!(manager.validate_id("").is_err());
+        assert!(manager.validate_id("a").is_err());
+        assert!(manager.validate_id("1A").is_err());
+        assert!(manager.validate_id("1-2").is_err());
+    }
+
+    #[test]
+    fn test_id_exists() {
+        use std::collections::HashSet;
+
+        let mut existing_ids = HashSet::new();
+        existing_ids.insert("1".to_string());
+        existing_ids.insert("1a2".to_string());
+
+        let config = IdConfig::default();
+        let manager = IdManager::new(config, |id: &str| existing_ids.contains(id));
+
+        let id1 = Id::parse("1").unwrap();
+        let id2 = Id::parse("1a2").unwrap();
+        let id3 = Id::parse("2").unwrap();
+
+        assert!(manager.id_exists(&id1));
+        assert!(manager.id_exists(&id2));
+        assert!(!manager.id_exists(&id3));
     }
 
     #[test]
     fn test_edge_cases() {
-        // Test large numbers
-        let large_id = Id::from_number(u32::MAX);
-        assert!(large_id.next_sibling().is_err()); // Should overflow
+        // Test alphabetic sequence overflow
+        let zz = IdComponent::alpha("zz").unwrap();
+        let incremented = zz.increment().unwrap();
+        assert_eq!(incremented, IdComponent::alpha("aaa").unwrap());
 
-        // Test long alphabetic sequences
-        let long_alpha = IdComponent::alpha("zzz").unwrap();
-        let incremented = long_alpha.increment().unwrap();
+        let zzz = IdComponent::alpha("zzz").unwrap();
+        let incremented = zzz.increment().unwrap();
         assert_eq!(incremented, IdComponent::alpha("aaaa").unwrap());
 
         // Test complex ID structure
@@ -749,5 +871,107 @@ mod tests {
         assert!(complex.is_descendant_of(&Id::parse("999").unwrap()));
         assert!(complex.is_descendant_of(&Id::parse("999z").unwrap()));
         assert!(complex.is_descendant_of(&Id::parse("999z999").unwrap()));
+        assert!(complex.is_descendant_of(&Id::parse("999z999z").unwrap()));
+
+        // Test sibling generation at different levels
+        let id = Id::parse("999z999z999").unwrap();
+        let sibling = id.next_sibling().unwrap();
+        assert_eq!(sibling.to_string(), "999z999z1000");
+    }
+
+    #[test]
+    fn test_component_parsing() {
+        // Test numeric components
+        let comp: IdComponent = "42".parse().unwrap();
+        assert_eq!(comp, IdComponent::numeric(42));
+
+        let comp: IdComponent = "0".parse().unwrap();
+        assert_eq!(comp, IdComponent::numeric(0));
+
+        // Test alpha components
+        let comp: IdComponent = "abc".parse().unwrap();
+        assert_eq!(comp, IdComponent::alpha("abc").unwrap());
+
+        let comp: IdComponent = "z".parse().unwrap();
+        assert_eq!(comp, IdComponent::alpha("z").unwrap());
+
+        // Test invalid components
+        let result: Result<IdComponent, _> = "".parse();
+        assert!(result.is_err());
+
+        let result: Result<IdComponent, _> = "ABC".parse();
+        assert!(result.is_err());
+
+        let result: Result<IdComponent, _> = "a1b".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_id_string_function() {
+        // Test the internal parsing function directly
+        let components = parse_id_string("1a2b").unwrap();
+        assert_eq!(components.len(), 4);
+        assert_eq!(components[0], IdComponent::numeric(1));
+        assert_eq!(components[1], IdComponent::alpha("a").unwrap());
+        assert_eq!(components[2], IdComponent::numeric(2));
+        assert_eq!(components[3], IdComponent::alpha("b").unwrap());
+
+        // Test single component
+        let components = parse_id_string("42").unwrap();
+        assert_eq!(components.len(), 1);
+        assert_eq!(components[0], IdComponent::numeric(42));
+
+        let components = parse_id_string("z").unwrap();
+        assert_eq!(components.len(), 1);
+        assert_eq!(components[0], IdComponent::alpha("z").unwrap());
+
+        // Test error cases
+        assert!(parse_id_string("").is_err());
+        assert!(parse_id_string("1A").is_err());
+        assert!(parse_id_string("a1").is_err()); // Must start with number
+    }
+
+    #[test]
+    fn test_id_new_validation() {
+        // Valid alternating pattern
+        let components = vec![
+            IdComponent::numeric(1),
+            IdComponent::alpha("a").unwrap(),
+            IdComponent::numeric(2),
+        ];
+        assert!(Id::new(components).is_ok());
+
+        // Invalid: starts with alpha
+        let components = vec![IdComponent::alpha("a").unwrap(), IdComponent::numeric(1)];
+        assert!(Id::new(components).is_err());
+
+        // Invalid: two numerics in a row
+        let components = vec![IdComponent::numeric(1), IdComponent::numeric(2)];
+        assert!(Id::new(components).is_err());
+
+        // Invalid: two alphas in a row
+        let components = vec![
+            IdComponent::numeric(1),
+            IdComponent::alpha("a").unwrap(),
+            IdComponent::alpha("b").unwrap(),
+        ];
+        assert!(Id::new(components).is_err());
+
+        // Invalid: empty components
+        assert!(Id::new(vec![]).is_err());
+    }
+
+    #[test]
+    fn test_overflow_handling() {
+        // Test numeric overflow
+        let large_comp = IdComponent::numeric(u32::MAX);
+        assert!(large_comp.increment().is_err());
+
+        // Test that we can still create IDs with large numbers
+        let large_id = Id::from_number(u32::MAX);
+        assert_eq!(large_id.to_string(), u32::MAX.to_string());
+
+        // Test that sibling generation fails with overflow
+        assert!(large_id.next_sibling().is_err());
     }
 }

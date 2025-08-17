@@ -20,7 +20,8 @@
 use anyhow::{Context as AnyhowContext, Result};
 use std::env;
 use std::path::{Path, PathBuf};
-use zettel_core::id::{IdConfig, IdManager};
+use zettel_core::config::{ConfigManager, ZettelConfig};
+use zettel_core::id::IdManager;
 
 use crate::services::VaultService;
 
@@ -68,51 +69,21 @@ pub struct Context {
     /// Determines how IDs are parsed from filenames and how new IDs are generated.
     /// Currently uses defaults, but in future will be loaded from vault config.
     /// Private because it's used internally to create IdManager instances.
-    id_config: IdConfig,
+    config: ZettelConfig,
 }
 
 impl Context {
     /// Create new context with vault path and configuration
     ///
-    /// This is the main entry point for setting up the application context.
-    /// It handles the configuration resolution hierarchy and validates that
-    /// the vault exists and is accessible.
-    ///
-    /// CONFIGURATION RESOLUTION ORDER:
-    /// 1. CLI argument (--vault /path)
-    /// 2. Environment variable (ZETTEL_VAULT=/path)
-    /// 3. Current working directory (fallback)
-    ///
-    /// ERROR HANDLING:
-    /// - Returns error if vault path doesn't exist
-    /// - Returns error if vault isn't readable
-    /// - Provides helpful context in error messages
-    ///
-    /// FUTURE ENHANCEMENTS:
-    /// - Load configuration from .zettel/config.toml
-    /// - Validate vault structure (.zettel directory exists)
-    /// - Support vault format migrations
-    ///
-    /// EXAMPLES:
-    /// ```rust
-    /// let ctx = Context::new(None)?;                          // Use environment/cwd
-    /// let ctx = Context::new(Some("/home/user/notes".into()))?; // Explicit path
-    /// ```
+    /// Now loads configuration from the full hierarchy:
+    /// defaults -> global config -> vault config -> env vars
     pub fn new(vault_path: Option<PathBuf>) -> Result<Self> {
         // Determine vault path using configuration hierarchy
-        // This follows Unix tool conventions: explicit args > env vars > defaults
         let vault_path = vault_path
-            .or_else(|| {
-                // Try environment variable, converting to PathBuf if present
-                env::var("ZETTEL_VAULT").ok().map(PathBuf::from)
-            })
-            .unwrap_or_else(|| {
-                // Fallback to current directory - safe because we validate below
-                env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-            });
+            .or_else(|| env::var("ZETTEL_VAULT").ok().map(PathBuf::from))
+            .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
         // Validate that the vault path exists and is accessible
-        // This provides early error detection rather than failing later
         if !vault_path.exists() {
             return Err(anyhow::anyhow!(
                 "Vault directory does not exist: {}\n\nTry:\n  zettel init {}",
@@ -128,148 +99,52 @@ impl Context {
             ));
         }
 
-        // Load ID configuration - currently uses defaults
-        // TODO: Load from .zettel/config.toml when that file exists
-        let id_config = Self::load_id_config(&vault_path).with_context(|| {
+        // Load complete configuration from all sources
+        let config = ConfigManager::load_config(Some(&vault_path)).with_context(|| {
             format!("Failed to load configuration from {}", vault_path.display())
         })?;
 
-        // Initialize vault service with validated path
+        // Initialize vault service
         let vault_service = VaultService::new(vault_path.clone());
 
         Ok(Self {
             vault_service,
             vault_path,
-            id_config,
-        })
-    }
-
-    /// Load ID configuration from vault or use defaults
-    ///
-    /// This function implements the configuration loading strategy.
-    /// Currently returns sensible defaults, but is designed to be extended
-    /// to read from .zettel/config.toml in the future.
-    ///
-    /// CONFIGURATION STRATEGY:
-    /// - Start with conservative defaults that work for most users
-    /// - Override with vault-specific settings if they exist
-    /// - Validate configuration for consistency
-    ///
-    /// DEFAULT CONFIGURATION PHILOSOPHY:
-    /// - "fuzzy" matching: Most permissive for filename patterns
-    /// - " - " separator: Readable and common in note-taking
-    /// - ASCII-only: Maximum compatibility across systems
-    ///
-    /// FUTURE CONFIG FILE FORMAT:
-    /// ```toml
-    /// [id]
-    /// match_rule = "fuzzy"
-    /// separator = " - "
-    /// allow_unicode = false
-    ///
-    /// [editor]
-    /// command = "helix"
-    /// args = ["+{line}:{col}"]
-    /// ```
-    fn load_id_config(_vault_path: &Path) -> Result<IdConfig> {
-        // TODO: Read from .zettel/config.toml if it exists
-        // For now, return sensible defaults that work for most users
-
-        Ok(IdConfig {
-            // Fuzzy matching is most permissive - works with various filename patterns
-            // "1a2.md", "1a2-title.md", "1a2 - My Note.md" all match
-            match_rule: "fuzzy".to_string(),
-
-            // Common separator that's readable and doesn't conflict with shell
-            separator: " - ".to_string(),
-
-            // ASCII-only for maximum compatibility across filesystems
-            allow_unicode: false,
+            config,
         })
     }
 
     /// Create an ID manager with vault-specific existence checking
     ///
-    /// The ID manager needs to know which IDs already exist to avoid conflicts
-    /// when generating new IDs. This method creates an IdManager configured
-    /// with a closure that checks the actual filesystem.
-    ///
-    /// DESIGN PATTERN: Dependency Injection with Closures
-    /// Rather than having IdManager directly depend on file system operations,
-    /// we inject a function that can check ID existence. This makes IdManager
-    /// testable and keeps it pure (no side effects).
-    ///
-    /// CLOSURE EXPLANATION:
-    /// The `move |id: &str|` creates a closure that captures `self` by reference.
-    /// This closure implements the `Fn(&str) -> bool` trait that IdManager expects.
-    /// The closure "closes over" the vault_service, giving IdManager access to
-    /// file operations without directly coupling them.
-    ///
-    /// LIFETIME CONSIDERATIONS:
-    /// The returned IdManager borrows from self (hence the lifetime parameter).
-    /// This ensures the Context lives as long as any IdManager created from it.
-    ///
-    /// USAGE PATTERN:
-    /// ```rust
-    /// let id_manager = ctx.get_id_manager();
-    /// let next_id = id_manager.next_available_sibling(&current_id)?;
-    /// ```
+    /// Now uses the comprehensive ID configuration instead of hardcoded rules.
     pub fn get_id_manager(&self) -> IdManager<impl Fn(&str) -> bool + '_> {
-        IdManager::new(
-            self.id_config.clone(),
-            // Closure that captures vault_service and checks ID existence
-            // The `move` keyword isn't needed here because we're borrowing &self
-            |id: &str| self.vault_service.id_exists(id),
-        )
+        IdManager::new(self.config.id.clone(), |id: &str| {
+            self.vault_service.id_exists(id)
+        })
     }
 
     /// Get vault path for commands that need filesystem operations
-    ///
-    /// Provides read-only access to the vault path. Commands might need this
-    /// for operations like determining where to create new files or for
-    /// displaying path information to users.
-    ///
-    /// DESIGN: Encapsulation
-    /// Rather than making vault_path public, we provide controlled access.
-    /// This prevents commands from accidentally modifying the path and
-    /// makes it clear what data commands are accessing.
     pub fn vault_path(&self) -> &Path {
         &self.vault_path
     }
 
     /// Get ID configuration for commands that need parsing rules
-    ///
-    /// Some commands might need direct access to ID configuration,
-    /// for example to display current settings or to validate user input
-    /// against the configured rules.
-    ///
-    /// USAGE EXAMPLE:
-    /// ```rust
-    /// println!("ID matching rule: {}", ctx.id_config().match_rule);
-    /// ```
-    pub fn id_config(&self) -> &IdConfig {
-        &self.id_config
+    pub fn id_config(&self) -> &zettel_core::config::IdConfig {
+        &self.config.id
+    }
+
+    /// Get complete configuration for commands that need access to all settings
+    pub fn config(&self) -> &ZettelConfig {
+        &self.config
     }
 
     /// Validate that this looks like a zettelkasten vault
-    ///
-    /// Future enhancement: Check for .zettel directory and valid configuration.
-    /// This would provide better error messages when users accidentally run
-    /// commands in the wrong directory.
-    ///
-    /// VALIDATION CHECKS (future):
-    /// - .zettel directory exists
-    /// - config.toml is valid
-    /// - No conflicting note formats
-    /// - Reasonable number of markdown files
     #[allow(dead_code)]
     pub fn validate_vault(&self) -> Result<()> {
         // TODO: Implement vault structure validation
-        // For now, just check that it's a directory (already done in new())
         Ok(())
     }
 }
-
 // CONTEXT PATTERN BENEFITS EXPLAINED:
 //
 // 1. DEPENDENCY INJECTION:

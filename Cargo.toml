@@ -61,3 +61,7 @@ lsp-types = "0.94"
 [workspace.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+# Ensure documentation for all workspace members
+[workspace.metadata.cargo-docs]
+include-private-items = true
