@@ -3,9 +3,10 @@
 members = [
     "crates/zettel-core",
     "crates/zettel-cli", 
-    "crates/zettel-lsp",
-    "crates/zettel-web",
+    # "crates/zettel-lsp",
+    # "crates/zettel-web",
 ]
+resolver = "3"
 exclude = []
 
 [workspace.package]
@@ -13,11 +14,12 @@ version = "0.1.0"
 authors = ["Raúl E. Taveras <raul@raultaveras.online>"]
 license = "MIT"
 repository = "https://github.com/rauletaveras/zettel"
-# documentation = "https://docs.rs/zettel-core"
+homepage = ""
+documentation = ""
 keywords = ["zettelkasten", "notes", "cli", "knowledge-management"]
 categories = ["command-line-utilities", "text-processing"]
-edition = "2025"
-rust-version = "1.70"
+edition = "2024"
+rust-version = "1.89"
 
 [workspace.dependencies]
 # Shared dependencies across all crates
@@ -53,8 +55,8 @@ tower-lsp = "0.20"
 lsp-types = "0.94"
 
 # Optional features
-git2 = { version = "0.18", optional = true }
-syntect = { version = "5.0", optional = true }
+# git2 = { version = "0.18", optional = true }
+# syntect = { version = "5.0", optional = true }
 
 [workspace.metadata.docs.rs]
 all-features = true

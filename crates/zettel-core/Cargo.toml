@@ -1,63 +1,15 @@
-# crates/zettel-core/Cargo.toml
 [package]
 name = "zettel-core"
-description = "Core library for Luhmann-style Zettelkasten management"
-readme = "README.md"
-version.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-documentation.workspace = true
-keywords.workspace = true
-categories.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-
-[features]
-default = ["search", "templates"]
-search = ["tantivy", "fuzzy-matcher"]
-templates = ["handlebars"]
-git = ["git2"]
-syntax-highlighting = ["syntect"]
-performance = ["rayon", "dashmap"]
+version = "0.1.0"
+edition = "2024"
 
 [dependencies]
-# Core dependencies
-serde.workspace = true
-serde_json.workspace = true
-serde_yaml.workspace = true
-anyhow.workspace = true
-thiserror.workspace = true
-regex.workspace = true
-chrono.workspace = true
-uuid.workspace = true
-walkdir.workspace = true
-indexmap.workspace = true
-crossbeam-channel.workspace = true
-notify.workspace = true
-tracing.workspace = true
+regex = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
 
-# Optional dependencies
-tantivy = { workspace = true, optional = true }
-fuzzy-matcher = { workspace = true, optional = true }
-handlebars = { version = "4.0", optional = true }
-git2 = { workspace = true, optional = true }
-syntect = { workspace = true, optional = true }
-rayon = { workspace = true, optional = true }
-dashmap = { workspace = true, optional = true }
-
-[dev-dependencies]
-tempfile.workspace = true
-tokio = { workspace = true, features = ["test-util", "macros"] }
-criterion = "0.5"
-proptest = "1.0"
-
-[[bench]]
-name = "id_generation"
-harness = false
-
-[[bench]]
-name = "search_performance"
-harness = false
-required-features = ["search"]
+[features]
+default = []
+git = []
+search = []
+templates = []
