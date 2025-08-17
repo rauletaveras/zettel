@@ -1,0 +1,7 @@
+# Zettel Configuration
+# ID matching: strict, separator, fuzzy
+match_rule = "fuzzy"
+separator = " - "
+
+# Editor (overrides EDITOR environment variable)
+# editor = "code"
