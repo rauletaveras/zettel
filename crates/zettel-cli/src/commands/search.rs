@@ -1,8 +1,16 @@
-// crates/zettel-cli/src/commands/search.rs - Note search command
+// crates/zettel-cli/src/commands/search.rs - Note Search Command
+//
+// This command implements simple text-based search across all notes in the vault.
+// It searches both filenames and file content using case-insensitive matching.
+
 use anyhow::Result;
 
 use crate::context::Context;
 
+/// Search notes by content or filename
+///
+/// This implements simple text-based search across all notes in the vault.
+/// It searches both filenames and file content using case-insensitive matching.
 pub fn handle(ctx: &Context, query: String) -> Result<()> {
     let files = ctx.vault_service.get_vault_files();
     let id_manager = ctx.get_id_manager();

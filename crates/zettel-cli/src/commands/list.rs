@@ -1,9 +1,19 @@
-// crates/zettel-cli/src/commands/list.rs - Note listing command
+// crates/zettel-cli/src/commands/list.rs - Note Listing Command
+//
+// This command provides different views of the note collection with support
+// for both human-readable and machine-readable output formats.
+
 use anyhow::Result;
 use serde_json;
 
 use crate::context::Context;
 
+/// List all notes in the vault with various output formats
+///
+/// This provides different views of the note collection:
+/// - Human-readable: Shows IDs and titles
+/// - Machine-readable: JSON output for scripting
+/// - Detailed: Full file paths for integration
 pub fn handle(ctx: &Context, full_paths: bool, json: bool) -> Result<()> {
     let files = ctx.vault_service.get_vault_files();
     let id_manager = ctx.get_id_manager();

@@ -1,4 +1,8 @@
-// crates/zettel-cli/src/commands/note.rs - Note management commands
+// crates/zettel-cli/src/commands/note.rs - Note Management Commands
+//
+// These commands handle the high-level workflow of creating and managing notes.
+// They coordinate between ID generation, file creation, and editor integration.
+
 use anyhow::Result;
 use zettel_core::id::Id;
 
@@ -6,6 +10,10 @@ use crate::cli::NoteCommands;
 use crate::context::Context;
 use crate::services::EditorService;
 
+/// Handle note management commands
+///
+/// These commands operate at a higher level than ID commands - they create actual files,
+/// manage content, and handle the user-facing aspects of note management.
 pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
     let id_manager = ctx.get_id_manager();
 
@@ -19,13 +27,14 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
                 std::process::exit(1);
             }
 
-            // Generate filename and content
+            // Generate filename based on title
             let filename = if let Some(ref title) = title {
                 format!("{} - {}.md", id, title)
             } else {
                 format!("{}.md", id)
             };
 
+            // Generate initial content
             let content = if let Some(ref title) = title {
                 format!("# {}\n\n", title)
             } else {
@@ -46,7 +55,7 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
         NoteCommands::Open { id } => {
             let parsed_id = Id::parse(&id)?;
 
-            // Find the note file
+            // Find the note file by searching for matching ID
             let files = ctx.vault_service.get_vault_files();
             let mut found_file = None;
 
