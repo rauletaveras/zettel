@@ -45,6 +45,7 @@ mod cli; // Command-line interface definitions (pure data structures)
 mod commands; // Command implementations (business logic)
 mod context; // Application context and dependency injection
 mod services; // Infrastructure services (file I/O, editor integration)
+mod stdin; // Stdin functions for command inputs
 
 use cli::Cli;
 use context::Context;

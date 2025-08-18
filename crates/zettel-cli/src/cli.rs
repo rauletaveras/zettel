@@ -256,7 +256,7 @@ pub enum IdCommands {
         /// EXAMPLES:
         /// zettel id next-sibling 1      # Output: 2 (or first available)
         /// zettel id next-sibling 1a     # Output: 1b (or first available)
-        id: String,
+        id: Option<String>,
     },
 
     /// Generate next child ID
@@ -284,7 +284,7 @@ pub enum IdCommands {
         /// EXAMPLES:
         /// zettel id next-child 1        # Output: 1a (or first available)
         /// zettel id next-child 1a       # Output: 1a1 (or first available)
-        id: String,
+        id: Option<String>,
     },
 
     /// Parse ID from filename
@@ -314,7 +314,7 @@ pub enum IdCommands {
         /// zettel id parse "1a2.md"              # Output: 1a2
         /// zettel id parse "1a2 - My Note.md"    # Output: 1a2
         /// zettel id parse "/path/to/1a2_note.md" # Output: 1a2
-        filename: String,
+        filename: Option<String>,
     },
 
     /// Validate ID format
@@ -343,7 +343,21 @@ pub enum IdCommands {
         /// zettel id validate 1a2        # Shows: Valid, depth 3, parent 1a
         /// zettel id validate 1A2        # Shows: Invalid, uppercase not allowed
         /// zettel id validate abc        # Shows: Invalid, must start with number
-        id: String,
+        id: Option<String>,
+    },
+
+    /// Validate multiple IDs from stdin (NEW!)
+    #[command(name = "validate-batch")]
+    ValidateBatch,
+
+    #[command(name = "extract-ids")]
+    ExtractIds {
+        /// Files to process (or read from stdin)
+        files: Vec<String>,
+
+        /// Read null-terminated input for safe filename handling
+        #[arg(short = '0', long)]
+        null_terminated: bool,
     },
 }
 

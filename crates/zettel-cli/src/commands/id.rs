@@ -16,6 +16,7 @@ use zettel_core::id::Id;
 
 use crate::cli::IdCommands;
 use crate::context::Context;
+use crate::stdin;
 
 /// Handle all ID manipulation commands
 ///
@@ -43,13 +44,15 @@ pub fn handle(ctx: &Context, cmd: IdCommands) -> Result<()> {
     let id_manager = ctx.get_id_manager();
 
     match cmd {
-        IdCommands::NextSibling { id } => handle_next_sibling(&id_manager, &id),
-
-        IdCommands::NextChild { id } => handle_next_child(&id_manager, &id),
-
-        IdCommands::Parse { filename } => handle_parse(&id_manager, &filename, ctx),
-
-        IdCommands::Validate { id } => handle_validate(&id),
+        IdCommands::NextSibling { id } => handle_next_sibling(&id_manager, id.as_deref()),
+        IdCommands::NextChild { id } => handle_next_child(&id_manager, id.as_deref()),
+        IdCommands::Parse { filename } => handle_parse(&id_manager, filename.as_deref(), ctx),
+        IdCommands::Validate { id } => handle_validate(id.as_deref()),
+        IdCommands::ValidateBatch => handle_validate_batch(),
+        IdCommands::ExtractIds {
+            files,
+            null_terminated,
+        } => handle_extract_ids(ctx, files, null_terminated),
     }
 }
 
@@ -92,13 +95,19 @@ pub fn handle(ctx: &Context, cmd: IdCommands) -> Result<()> {
 /// - Invalid ID format: "abc" (must start with number)
 /// - ID overflow: Extremely rare but possible with very deep hierarchies
 /// - Parse errors: Malformed ID strings
-fn handle_next_sibling<F>(id_manager: &zettel_core::id::IdManager<F>, id: &str) -> Result<()>
+fn handle_next_sibling<F>(
+    id_manager: &zettel_core::id::IdManager<F>,
+    id_input: Option<&str>,
+) -> Result<()>
 where
     F: Fn(&str) -> bool,
 {
     // Parse and validate the input ID
     // This catches common user errors like invalid format early
-    let current_id = Id::parse(id).map_err(|e| anyhow::anyhow!("Invalid ID '{}': {}", id, e))?;
+    // Now incorporates stdin
+    let id_str = stdin::read_input_or_stdin(id_input)?;
+    let current_id =
+        Id::parse(&id_str).map_err(|e| anyhow::anyhow!("Invalid ID '{}': {}", id_str, e))?;
 
     // Generate next available sibling using business logic from core
     // The ID manager handles existence checking and conflict resolution
@@ -154,14 +163,17 @@ where
 /// child_id=$(zettel id next-child 1a2)
 /// zettel note create "$child_id" "Neural Network Architectures"
 /// ```
-fn handle_next_child<F>(id_manager: &zettel_core::id::IdManager<F>, id: &str) -> Result<()>
+fn handle_next_child<F>(
+    id_manager: &zettel_core::id::IdManager<F>,
+    id_input: Option<&str>,
+) -> Result<()>
 where
     F: Fn(&str) -> bool,
 {
     // Parse parent ID and validate format
+    let id_str = stdin::read_input_or_stdin(id_input)?;
     let parent_id =
-        Id::parse(id).map_err(|e| anyhow::anyhow!("Invalid parent ID '{}': {}", id, e))?;
-
+        Id::parse(&id_str).map_err(|e| anyhow::anyhow!("Invalid parent ID '{}': {}", id_str, e))?;
     // Generate first available child ID
     // The ID manager determines the correct pattern (letter vs number)
     // and finds the first available ID in that sequence
@@ -211,21 +223,21 @@ where
 /// 3. ID is valid Luhmann format (starts with number, alternates)
 fn handle_parse<F>(
     id_manager: &zettel_core::id::IdManager<F>,
-    filename: &str,
+    filename: Option<&str>,
     ctx: &Context,
 ) -> Result<()>
 where
     F: Fn(&str) -> bool,
 {
+    // Get filename from argument or stdin
+    let filename_str = crate::stdin::read_input_or_stdin(filename)?;
     // Extract ID using vault's configured matching rules
     // This might return None if filename doesn't match expected pattern
-    if let Some(id) = id_manager.extract_from_filename(filename) {
-        // Success: output the parsed ID
+    if let Some(id) = id_manager.extract_from_filename(&filename_str) {
         println!("{}", id);
         Ok(())
     } else {
-        // Failure: provide helpful error message and exit with error code
-        eprintln!("No valid ID found in filename: {}", filename);
+        eprintln!("No valid ID found in filename: {}", filename_str);
         eprintln!("Check vault configuration if this seems wrong.");
         eprintln!("Current match rule: {}", ctx.id_config().match_rule);
         std::process::exit(1);
@@ -277,8 +289,10 @@ where
 /// zettel id validate $(zettel id next-sibling 1z)
 /// # Shows the structure of the generated sibling
 /// ```
-fn handle_validate(id: &str) -> Result<()> {
-    match Id::parse(id) {
+fn handle_validate(id_input: Option<&str>) -> Result<()> {
+    let id_str = stdin::read_input_or_stdin(id_input)?;
+
+    match Id::parse(&id_str) {
         Ok(parsed_id) => {
             // Valid ID: show detailed structural information
             println!("✅ Valid ID: {}", parsed_id);
@@ -333,6 +347,66 @@ fn handle_validate(id: &str) -> Result<()> {
             eprintln!("  ❌ 1 a      (contains space)");
 
             std::process::exit(1);
+        }
+    }
+
+    Ok(())
+}
+
+// NEW: Batch validation command
+fn handle_validate_batch() -> Result<()> {
+    let ids = stdin::read_lines_from_stdin()?;
+
+    let mut valid_count = 0;
+    let mut invalid_count = 0;
+
+    for id_str in ids {
+        match Id::parse(&id_str) {
+            Ok(parsed_id) => {
+                println!("✅ {}: Valid (depth {})", parsed_id, parsed_id.depth());
+                valid_count += 1;
+            }
+            Err(e) => {
+                eprintln!("❌ {}: Invalid - {}", id_str, e);
+                invalid_count += 1;
+            }
+        }
+    }
+
+    eprintln!(
+        "Validated {} IDs: {} valid, {} invalid",
+        valid_count + invalid_count,
+        valid_count,
+        invalid_count
+    );
+
+    if invalid_count > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn handle_extract_ids(ctx: &Context, files: Vec<String>, null_terminated: bool) -> Result<()> {
+    let id_manager = ctx.get_id_manager();
+
+    let files_to_process = if files.is_empty() {
+        if null_terminated {
+            stdin::read_null_terminated_input()?
+        } else {
+            stdin::read_lines_from_stdin()?
+        }
+    } else {
+        files
+    };
+
+    for file_path in files_to_process {
+        if let Some(filename) = std::path::Path::new(&file_path).file_name() {
+            if let Some(filename_str) = filename.to_str() {
+                if let Some(id) = id_manager.extract_from_filename(filename_str) {
+                    println!("{}", id);
+                }
+            }
         }
     }
 
