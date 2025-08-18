@@ -8,6 +8,7 @@ use anyhow::Result;
 use std::env;
 use std::path::Path;
 use std::process::Command;
+use zettel_core::config::EditorConfig;
 
 /// Handles text editor operations
 ///
@@ -58,7 +59,15 @@ impl EditorService {
     /// export ZETTEL_EDITOR="helix +{line}:{col}"  # Cursor positioning
     /// export ZETTEL_EDITOR="code --wait --goto {file}:{line}:{col}"
     /// ```
-    pub fn get_editor_command() -> String {
+    pub fn get_editor_command(config: Option<&EditorConfig>) -> String {
+        // 1. Check config file first
+        if let Some(config) = config {
+            if let Some(command) = &config.command {
+                return command.clone();
+            }
+        }
+
+        // 2. Check environment variables
         env::var("ZETTEL_EDITOR")
             .or_else(|_| env::var("EDITOR"))
             .unwrap_or_else(|_| {
@@ -96,8 +105,8 @@ impl EditorService {
     /// ```rust
     /// EditorService::open_file(Path::new("1a.md"))?;
     /// ```
-    pub fn open_file(path: &Path) -> Result<()> {
-        let editor = Self::get_editor_command();
+    pub fn open_file(path: &Path, config: Option<&EditorConfig>) -> Result<()> {
+        let editor = Self::get_editor_command(config);
 
         // Launch editor and wait for completion
         let status = Command::new(&editor)

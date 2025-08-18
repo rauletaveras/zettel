@@ -327,6 +327,7 @@ impl VaultService {
 # - "strict": Filenames must be exactly the ID (e.g., "1a2.md")
 # - "separator": ID followed by separator and title (e.g., "1a2 - My Note.md")  
 # - "fuzzy": ID at start, anything after first non-alphanumeric (e.g., "1a2_note.md")
+[id]
 match_rule = "fuzzy"
 
 # Separator used between ID and title in filenames
@@ -336,7 +337,8 @@ separator = " - "
 # Editor Configuration
 # Override the default editor selection for this vault
 # If not set, uses ZETTEL_EDITOR, then EDITOR environment variables
-# editor = "helix"
+[editor]
+# command = "hx"
 # editor_args = ["+{line}:{col}"]  # Future feature: cursor positioning
 
 # Template Configuration

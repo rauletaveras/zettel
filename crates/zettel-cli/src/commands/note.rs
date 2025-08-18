@@ -48,7 +48,7 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
 
             // Optionally open in editor
             if open {
-                EditorService::open_file(&note_path)?;
+                EditorService::open_file(&note_path, Some(&ctx.config().editor))?;
             }
         }
 
@@ -71,7 +71,7 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
             }
 
             if let Some(file_path) = found_file {
-                EditorService::open_file(&file_path)?;
+                EditorService::open_file(&file_path, Some(&ctx.config().editor))?;
             } else {
                 eprintln!("❌ No note found with ID: {}", id);
                 std::process::exit(1);
