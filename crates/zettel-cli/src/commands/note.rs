@@ -19,31 +19,30 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
 
     match cmd {
         NoteCommands::Create { id, title, open } => {
-            let parsed_id = Id::parse(&id)?;
+            // Get ID from argument or stdin
+            let id_str = crate::stdin::read_input_or_stdin(id.as_deref())?;
+            let parsed_id = Id::parse(&id_str)?;
 
-            // Safety check: don't overwrite existing notes
+            // Safety check
             if id_manager.id_exists(&parsed_id) {
-                eprintln!("❌ Note with ID '{}' already exists", id);
+                eprintln!("❌ Note with ID '{}' already exists", id_str);
                 std::process::exit(1);
             }
 
             // Generate filename based on title
-            let filename = if let Some(ref title) = title {
-                format!("{} - {}.md", id, title)
-            } else {
-                format!("{}.md", id)
+            let filename = match &title {
+                Some(t) => format!("{} - {}.md", id_str, t),
+                None => format!("{}.md", id_str),
             };
 
             // Generate initial content
-            let content = if let Some(ref title) = title {
-                format!("# {}\n\n", title)
-            } else {
-                format!("# Note {}\n\n", id)
+            let content = match &title {
+                Some(t) => format!("# {}\n\n", t),
+                None => format!("# Note {}\n\n", id_str),
             };
 
             // Create the file
             let note_path = ctx.vault_service.create_file(&filename, &content)?;
-
             println!("✅ Created note: {}", note_path.display());
 
             // Optionally open in editor
@@ -51,11 +50,12 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
                 EditorService::open_file(&note_path, Some(&ctx.config().editor))?;
             }
         }
-
         NoteCommands::Open { id } => {
-            let parsed_id = Id::parse(&id)?;
+            // Get ID from argument or stdin
+            let id_str = crate::stdin::read_input_or_stdin(id.as_deref())?;
+            let parsed_id = Id::parse(&id_str)?;
 
-            // Find the note file by searching for matching ID
+            // Find and open the note
             let files = ctx.vault_service.get_vault_files();
             let mut found_file = None;
 
@@ -73,15 +73,17 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
             if let Some(file_path) = found_file {
                 EditorService::open_file(&file_path, Some(&ctx.config().editor))?;
             } else {
-                eprintln!("❌ No note found with ID: {}", id);
+                eprintln!("❌ No note found with ID: {}", id_str);
                 std::process::exit(1);
             }
         }
 
         NoteCommands::Show { id } => {
-            let parsed_id = Id::parse(&id)?;
+            // Get ID from argument or stdin
+            let id_str = crate::stdin::read_input_or_stdin(id.as_deref())?;
+            let parsed_id = Id::parse(&id_str)?;
 
-            // Find and display the note content
+            // Find and display the note
             let files = ctx.vault_service.get_vault_files();
             let mut found_file = None;
 
@@ -102,7 +104,7 @@ pub fn handle(ctx: &Context, cmd: NoteCommands) -> Result<()> {
                 println!("{}", "─".repeat(50));
                 println!("{}", content);
             } else {
-                eprintln!("❌ No note found with ID: {}", id);
+                eprintln!("❌ No note found with ID: {}", id_str);
                 std::process::exit(1);
             }
         }

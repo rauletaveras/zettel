@@ -209,7 +209,7 @@ pub enum Commands {
         /// Searches both filenames and file content.
         ///
         /// TIP: Use quotes for multi-word queries: "machine learning"
-        query: String,
+        query: Option<String>,
     },
 }
 
@@ -409,7 +409,7 @@ pub enum NoteCommands {
         /// 1        Root note
         /// 1a       Child of note 1
         /// 1a2      Grandchild of note 1
-        id: String,
+        id: Option<String>,
 
         /// Note title (optional)
         ///
@@ -458,7 +458,7 @@ pub enum NoteCommands {
         /// EXAMPLES:
         /// zettel note open 1        # Open root note
         /// zettel note open 1a2      # Open specific note in hierarchy
-        id: String,
+        id: Option<String>,
     },
 
     /// Display note content to stdout
@@ -479,7 +479,7 @@ pub enum NoteCommands {
         ///
         /// Must match an existing note in the vault.
         /// Outputs the complete content to stdout for processing.
-        id: String,
+        id: Option<String>,
     },
 }
 
