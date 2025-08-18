@@ -160,7 +160,8 @@ impl EditorService {
 //
 // 4. INTEGRATION WITH EDITOR PLUGINS:
 //    # From within Helix, create sibling of current note
-//    :sh zettel id next-sibling $(zettel id parse %) | xargs zettel note create --open
+//    :sh zettel id next-sibling $(zettel id parse %) | xargs zettel note create
+//    :sh zettel note create $(zettel id next-sibling $(zettel id parse %{buffer_name}))
 //
 // 5. BATCH OPERATIONS:
 //    for title in "Introduction" "Methods" "Results" "Discussion"; do
