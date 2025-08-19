@@ -19,7 +19,7 @@
 // - Self-documenting: Generated config files include explanatory comments
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use thiserror::Error;
 
 /// Errors that can occur during configuration loading and validation
@@ -251,8 +251,17 @@ pub struct LinkingConfig {
     /// Default: "[[{filename}]]" or "[[{filename}|{title}]]" based on use_title_alias
     #[serde(default)]
     pub format: Option<String>,
-}
 
+    /// Where to insert child links in parent notes
+    ///
+    /// Options: "end" (at end of file), "after_title" (after # heading), "section" (in ## Links section)
+    #[serde(default = "default_link_insertion_point")]
+    pub insertion_point: String,
+
+    /// Whether to create a dedicated links section when inserting
+    #[serde(default = "default_false")]
+    pub create_links_section: bool,
+}
 /// Editor integration configuration
 ///
 /// Controls how the CLI integrates with text editors for note editing and creation.
@@ -506,7 +515,7 @@ parallel_processing = true
     ///
     /// This implements the override behavior where later configs
     /// take precedence over earlier ones.
-    fn merge_configs(base: ZettelConfig, override_config: ZettelConfig) -> ZettelConfig {
+    fn merge_configs(_base: ZettelConfig, override_config: ZettelConfig) -> ZettelConfig {
         // Implementation would merge each field, with override_config taking precedence
         // For now, just return override_config as placeholder
         override_config
@@ -549,7 +558,7 @@ parallel_processing = true
                 return Err(ConfigError::ValidationError(format!(
                     "Invalid match_rule '{}'. Must be one of: strict, separator, fuzzy",
                     config.id.match_rule
-                )))
+                )));
             }
         }
 
@@ -577,7 +586,7 @@ parallel_processing = true
                 return Err(ConfigError::ValidationError(format!(
                     "Invalid output format '{}'. Must be one of: human, json, csv, xml",
                     config.output.default_format
-                )))
+                )));
             }
         }
 
@@ -592,6 +601,10 @@ parallel_processing = true
 /// These functions provide the default values used when config fields
 /// are missing from TOML files. They're separate functions so they can
 /// be used both for serde defaults and for documentation.
+
+fn default_link_insertion_point() -> String {
+    "end".to_string()
+}
 
 fn default_true() -> bool {
     true
@@ -712,6 +725,8 @@ impl Default for LinkingConfig {
             insert_in_child: true,
             use_title_alias: false,
             format: None,
+            insertion_point: default_link_insertion_point(),
+            create_links_section: false,
         }
     }
 }

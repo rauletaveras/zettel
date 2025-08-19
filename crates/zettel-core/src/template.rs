@@ -17,17 +17,16 @@
 // EXAMPLE TEMPLATE:
 // ```markdown
 // # {{title}}
-// 
+//
 // Created: {{date}}
 // Parent: {{link}}
-// 
+//
 // ## Notes
-// 
+//
 // ## References
 // ```
 
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -306,7 +305,8 @@ impl TemplateService {
             // Template directory specified - use default template
             if config.default_template.trim().is_empty() {
                 return Err(TemplateError::ConfigError(
-                    "Template directory specified but no default template name provided".to_string(),
+                    "Template directory specified but no default template name provided"
+                        .to_string(),
                 ));
             }
 

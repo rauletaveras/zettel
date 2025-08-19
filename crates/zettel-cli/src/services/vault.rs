@@ -323,32 +323,71 @@ impl VaultService {
 # This file controls how the zettel CLI tool behaves in this vault.
 # Lines starting with # are comments and are ignored.
 
-# ID Matching Rules
-# - "strict": Filenames must be exactly the ID (e.g., "1a2.md")
-# - "separator": ID followed by separator and title (e.g., "1a2 - My Note.md")  
-# - "fuzzy": ID at start, anything after first non-alphanumeric (e.g., "1a2_note.md")
 [id]
+# ID matching rule: "strict", "separator", or "fuzzy"
 match_rule = "fuzzy"
 
 # Separator used between ID and title in filenames
-# Only used when match_rule is "separator" or when creating files with titles
 separator = " - "
 
-# Editor Configuration
-# Override the default editor selection for this vault
-# If not set, uses ZETTEL_EDITOR, then EDITOR environment variables
+# Allow Unicode characters in IDs (may cause filesystem issues)
+allow_unicode = false
+
+[note]
+# Include note title in filename
+add_title = false
+
+# Add note title as frontmatter alias
+add_alias = false
+
+# File extension for new notes
+extension = "md"
+
+[template]
+# Use custom template files
+enabled = false
+
+# Path to template file (relative to vault root)
+# file = "templates/note.md"
+
+# Require {{title}} placeholder in templates
+require_title = true
+
+# Require {{link}} placeholder in templates  
+require_link = true
+
+[linking]
+# Insert link to child in parent when creating children
+insert_in_parent = true
+
+# Insert link to parent in child when creating children
+insert_in_child = true
+
+# Use title as display text in links: [[file|title]] vs [[file]]
+use_title_alias = false
+
+# Where to insert child links: "end", "after_title", "section"
+insertion_point = "end"
+
+# Create dedicated ## Links section when inserting
+create_links_section = false
+
 [editor]
-# command = "hx"
-# editor_args = ["+{line}:{col}"]  # Future feature: cursor positioning
+# Editor command (overrides ZETTEL_EDITOR and EDITOR env vars)
+# command = "helix"
 
-# Template Configuration
-# template_dir = "templates"      # Future feature: custom templates
-# default_template = "note.md"    # Future feature: default template
+# Arguments to pass to editor (supports {file}, {line}, {col} placeholders)
+# args = ["+{line}:{col}"]
 
-# Performance Settings
-# cache_enabled = true            # Future feature: performance caching
-# max_cache_age = "1h"           # Future feature: cache invalidation
-"#;
+[output]
+# Default output format: "human", "json", "csv"
+default_format = "human"
+
+# Color output: "auto", "always", "never"
+color = "auto"
+
+# Use pager for long output: "auto", "always", "never"  
+pager = "auto"#;
 
         fs::write(zettel_dir.join("config.toml"), config_content)
             .with_context(|| "Failed to create config.toml")?;
@@ -400,45 +439,134 @@ separator = " - "
     pub fn vault_path(&self) -> &Path {
         &self.vault_path
     }
+
+    /// Insert content into an existing file at specified location
+    ///
+    /// Used for bidirectional linking - when creating child notes, we need to
+    /// insert links into the parent file.
+    ///
+    /// INSERTION STRATEGIES:
+    /// - "end": Append to end of file with proper spacing
+    /// - "after_title": Insert after the first # heading
+    /// - "section": Insert in or create a ## Links section
+    pub fn insert_content_into_file(
+        &self,
+        file_path: &str,
+        content: &str,
+        insertion_point: &str,
+        create_section: bool,
+    ) -> Result<()> {
+        let full_path = self.vault_path.join(file_path);
+
+        if !full_path.exists() {
+            return Err(anyhow::anyhow!(
+                "File does not exist: {}",
+                full_path.display()
+            ));
+        }
+
+        let existing_content = fs::read_to_string(&full_path)
+            .with_context(|| format!("Failed to read file: {}", full_path.display()))?;
+
+        let new_content = match insertion_point {
+            "end" => self.insert_at_end(&existing_content, content),
+            "after_title" => self.insert_after_title(&existing_content, content),
+            "section" => self.insert_in_links_section(&existing_content, content, create_section),
+            _ => self.insert_at_end(&existing_content, content), // Default fallback
+        };
+
+        fs::write(&full_path, new_content)
+            .with_context(|| format!("Failed to write file: {}", full_path.display()))?;
+
+        Ok(())
+    }
+
+    /// Insert content at the end of file with proper spacing
+    fn insert_at_end(&self, existing_content: &str, new_content: &str) -> String {
+        let trimmed = existing_content.trim_end();
+        if trimmed.is_empty() {
+            new_content.to_string()
+        } else {
+            format!("{}\n\n{}", trimmed, new_content)
+        }
+    }
+
+    /// Insert content after the first # heading
+    fn insert_after_title(&self, existing_content: &str, new_content: &str) -> String {
+        let lines: Vec<&str> = existing_content.lines().collect();
+
+        // Find first heading line
+        for (i, line) in lines.iter().enumerate() {
+            if line.starts_with("# ") {
+                let mut new_lines = lines[..=i].to_vec();
+                new_lines.push(""); // Add blank line after title
+                new_lines.push(new_content);
+                new_lines.push(""); // Add blank line after inserted content
+
+                // Add remaining lines if any
+                if i + 1 < lines.len() {
+                    new_lines.extend_from_slice(&lines[i + 1..]);
+                }
+
+                return new_lines.join("\n");
+            }
+        }
+
+        // No heading found, insert at beginning
+        if existing_content.trim().is_empty() {
+            new_content.to_string()
+        } else {
+            format!("{}\n\n{}", new_content, existing_content)
+        }
+    }
+
+    /// Insert content in a ## Links section, creating it if needed
+    fn insert_in_links_section(
+        &self,
+        existing_content: &str,
+        new_content: &str,
+        create_section: bool,
+    ) -> String {
+        let lines: Vec<&str> = existing_content.lines().collect();
+
+        // Look for existing ## Links section
+        for (i, line) in lines.iter().enumerate() {
+            if line.starts_with("## Links")
+                || line.starts_with("## Related")
+                || line.starts_with("## Children")
+            {
+                // Found links section, insert after it
+                let mut new_lines = lines[..=i].to_vec();
+                new_lines.push(""); // Blank line after section header
+                new_lines.push(new_content);
+
+                // Add remaining lines
+                if i + 1 < lines.len() {
+                    new_lines.push(""); // Blank line before next content
+                    new_lines.extend_from_slice(&lines[i + 1..]);
+                }
+
+                return new_lines.join("\n");
+            }
+        }
+
+        // No links section found
+        if create_section {
+            // Create new links section at end
+            let trimmed = existing_content.trim_end();
+            if trimmed.is_empty() {
+                format!("## Links\n\n{}", new_content)
+            } else {
+                format!("{}\n\n## Links\n\n{}", trimmed, new_content)
+            }
+        } else {
+            // Just append at end
+            self.insert_at_end(existing_content, new_content)
+        }
+    }
 }
 
-// TESTING STRATEGY:
 //
-// This service is highly testable because it only deals with file I/O:
-//
-// ```rust
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use tempfile::TempDir;
-//
-//     #[test]
-//     fn test_id_exists() {
-//         let temp = TempDir::new().unwrap();
-//         let vault = VaultService::new(temp.path().to_path_buf());
-//
-//         // Create test file
-//         std::fs::write(temp.path().join("1a2.md"), "# Test").unwrap();
-//
-//         assert!(vault.id_exists("1a2"));
-//         assert!(!vault.id_exists("nonexistent"));
-//     }
-//
-//     #[test]
-//     fn test_get_vault_files() {
-//         let temp = TempDir::new().unwrap();
-//         let vault = VaultService::new(temp.path().to_path_buf());
-//
-//         // Create test files
-//         std::fs::write(temp.path().join("1.md"), "").unwrap();
-//         std::fs::write(temp.path().join("2.md"), "").unwrap();
-//         std::fs::write(temp.path().join("not-md.txt"), "").unwrap();
-//
-//         let files = vault.get_vault_files();
-//         assert_eq!(files.len(), 2);  // Only .md files
-//     }
-// }
-// ```
 //
 // SERVICE PATTERN BENEFITS:
 //
