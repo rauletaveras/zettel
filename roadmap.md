@@ -32,8 +32,6 @@
 - Template content generation with placeholder substitution
 - Built-in vs custom template logic
 
-## ❌ What We're Missing for Feature Parity
-
 ### Bidirectional Linking:
 
 - Automatic parent→child link insertion when creating children
@@ -41,10 +39,10 @@
 - Link format configuration (with/without aliases)
 - Text selection replacement with links
 
+## ❌ What We're Missing for Feature Parity
+
 ### Advanced Note Operations:
 
-- Sibling/child creation with automatic linking
-- Frontmatter alias generation
 - Link insertion at cursor position
 - Text selection processing as titles
 
@@ -67,10 +65,3 @@
 - Caching of zettel file lists
 - Metadata cache usage for title extraction
 - Cache invalidation strategies
-
-### Configuration Completeness:
-
-- Filename formatting options (ID-only vs ID+title)
-- Link behavior settings (insert in parent/child)
-- Separator configuration
-- Alias generation settings

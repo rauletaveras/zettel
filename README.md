@@ -39,16 +39,18 @@ A Zettelkasten is a note-taking system that uses hierarchical alphanumeric IDs t
 - Custom template file support
 - Template validation and placeholder substitution
 
-### Missing for Feature Parity
-
-**Bidirectional Linking**
+### ✅ **Bidirectional Linking**
 - Automatic parent↔child link insertion
 - Link format configuration
+
+### Missing for Feature Parity
 
 **Advanced Operations**
 - Link insertion commands
 - Text selection processing
 - Hierarchy reorganization
+
+**Fuzzy Search**
 
 ## Installation
 
@@ -179,6 +181,7 @@ and can be easily integrated with Helix, Vim, Emacs, or VS Code.
 
 #### Example helix integration
 If using Windows, make sure your shell is set to PowerShell
+
 ```toml
 [editor]
 shell = ["powershell", "-NoProfile", "-Command"]
@@ -193,11 +196,8 @@ c = ":sh zettel id parse %{buffer_name} | zettel id next-child | zettel note cre
 
 ## Roadmap
 
-- [ ] Automatic bidirectional linking
 - [ ] Link insertion commands
 - [ ] LSP server for editor integration
-- [ ] Web interface
-- [ ] Import/export from other systems
 
 ## Contributing
 
@@ -212,7 +212,9 @@ MIT License - see LICENSE file for details.
 
 ## Acknowledgments
 
-Inspired by the excellent [luhman-obsidian-plugin](https://github.com/Dyldog/luhman-obsidian-plugin) by Dyldog. This CLI implementation aims
+Based on by the excellent
+[luhman-obsidian-plugin](https://github.com/Dyldog/luhman-obsidian-plugin) by Dyldog.
+This CLI implementation aims
 to bring the same powerful Zettelkasten workflow
 to command-line users
 and enable broader integration possibilities.
