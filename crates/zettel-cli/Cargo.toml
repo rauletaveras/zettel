@@ -1,7 +1,16 @@
 [package]
-name = "zettel-cli"
-version = "0.2.0"
-edition = "2024"
+name = "zettel-core"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "cli app for Luhmann-style Zettelkasten management"
 
 [[bin]]
 name = "zettel"
