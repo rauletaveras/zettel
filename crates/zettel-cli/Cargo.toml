@@ -1,14 +1,14 @@
 [package]
 name = "zettel-cli"
-version = "0.1.0"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
 
 [[bin]]
 name = "zettel"
 path = "src/main.rs"
 
 [dependencies]
-zettel-core = { path = "../zettel-core" }
+zettel-core = { path = "../zettel-core", version = "0.2" }
 clap = { version = "4.0", features = ["derive"] }
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
