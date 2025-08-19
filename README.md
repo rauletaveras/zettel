@@ -62,11 +62,6 @@ cd zettel
 cargo install --path crates/zettel-cli
 ```
 
-### Using Cargo
-```bash
-cargo install zettel-cli
-```
-
 ## Quick Start
 
 ```bash
