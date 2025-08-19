@@ -81,6 +81,7 @@ fn main() -> Result<()> {
     match cli.command {
         cli::Commands::Id(cmd) => commands::id::handle(&ctx, cmd),
         cli::Commands::Note(cmd) => commands::note::handle(&ctx, cmd),
+        cli::Commands::Template(cmd) => commands::template::handle(&ctx, cmd),
         cli::Commands::List { full_paths, json } => commands::list::handle(&ctx, full_paths, json),
         cli::Commands::Search { query } => commands::search::handle(&ctx, query),
         cli::Commands::Init { .. } => unreachable!(), // Already handled above

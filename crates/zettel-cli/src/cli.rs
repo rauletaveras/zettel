@@ -154,6 +154,24 @@ pub enum Commands {
     #[command(subcommand)]
     Note(NoteCommands),
 
+    /// Template operations (validation, testing, placeholder extraction)
+    ///
+    /// Commands for working with note templates. These enable users to:
+    /// - Validate template files before using them
+    /// - Test template output with sample data
+    /// - Extract placeholder information from templates
+    /// - Generate example templates
+    ///
+    /// COMPOSABILITY:
+    /// These commands follow Unix patterns for pipeline use:
+    /// ```bash
+    /// cat my-template.md | zettel template validate
+    /// zettel template test "My Title" "[[parent]]" < template.md
+    /// find templates/ -name "*.md" -exec zettel template validate {} \;
+    /// ```
+    #[command(subcommand)]
+    Template(TemplateCommands),
+
     /// List notes in the vault
     ///
     /// Provides different views of the note collection. Supports both
@@ -480,6 +498,50 @@ pub enum NoteCommands {
         /// Must match an existing note in the vault.
         /// Outputs the complete content to stdout for processing.
         id: Option<String>,
+    },
+}
+
+/// Template-specific subcommands
+#[derive(Subcommand)]
+pub enum TemplateCommands {
+    /// Validate template file format and requirements
+    Validate {
+        /// Template file to validate (or read from stdin)
+        file: Option<String>,
+    },
+
+    /// Test template output with sample data
+    Test {
+        /// Note title to use in test
+        title: String,
+
+        /// Backlink content to use in test
+        link: String,
+
+        /// Template file to test (or read from stdin)
+        #[arg(long)]
+        file: Option<String>,
+    },
+
+    /// Extract placeholder information from template
+    Placeholders {
+        /// Template file to analyze (or read from stdin)
+        file: Option<String>,
+
+        /// Output as JSON for machine processing
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Generate example template files
+    Example {
+        /// Type of example template to generate
+        #[arg(value_parser = ["basic", "academic", "meeting", "daily"])]
+        template_type: String,
+
+        /// Output file path (or write to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
     },
 }
 

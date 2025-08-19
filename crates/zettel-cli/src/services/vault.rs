@@ -356,6 +356,38 @@ separator = " - "
         Ok(())
     }
 
+    /// Read template file content from disk
+    ///
+    /// Reads a template file for use in note creation. Template paths are
+    /// relative to the vault root directory. Returns the raw file content
+    /// for template processing by the core template service.
+    ///
+    /// ERROR HANDLING:
+    /// Provides specific error context for template file issues to help
+    /// users troubleshoot template configuration problems.
+    ///
+    /// EXAMPLES:
+    /// ```rust
+    /// let content = vault.read_template_file("templates/academic.md")?;
+    /// ```
+    pub fn read_template_file(&self, relative_path: &str) -> Result<String> {
+        let template_path = self.vault_path.join(relative_path);
+
+        if !template_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Template file not found: {}\nCheck the template path in your configuration.",
+                template_path.display()
+            ));
+        }
+
+        fs::read_to_string(&template_path).with_context(|| {
+            format!(
+                "Failed to read template file: {}\nCheck file permissions and encoding (should be UTF-8).",
+                template_path.display()
+            )
+        })
+    }
+
     /// Get the vault path for operations that need it
     ///
     /// Provides read-only access to the vault path. Some operations might need

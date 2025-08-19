@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+#### Template system
+- Template validation: Check a file complies with zettel template requirements
+  - `zettel template validate <file>`
+- Generate basic default templates: simple, academic, etc
+  - `zettel template example <template-type>` (possible values: basic, academic, meeting, daily)
+- If config options set with default template, `zettel note create` will create the note following the given template.
 
 ## [0.1.0] - 2025-08-19
 

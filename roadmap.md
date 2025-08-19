@@ -25,13 +25,14 @@
 - Note display (zettel note show)
 - File opening (zettel note open)
 
-## ❌ What We're Missing for Feature Parity
 ### Template System:
 
 - Custom template file support
 - Template validation (checking for {{title}} and {{link}} placeholders)
 - Template content generation with placeholder substitution
 - Built-in vs custom template logic
+
+## ❌ What We're Missing for Feature Parity
 
 ### Bidirectional Linking:
 

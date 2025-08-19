@@ -7,7 +7,7 @@
 // MODULE ORGANIZATION:
 // - init: Vault initialization (special case, no context needed)
 // - id: ID manipulation commands (pure computation)
-// - note: Note management commands (file creation, editing)  
+// - note: Note management commands (file creation, editing)
 // - list: Vault listing and discovery commands
 // - search: Content-based search commands
 //
@@ -17,8 +17,9 @@
 // - Clear separation between different types of operations
 // - Modules can have their own helper functions and types
 
-pub mod init;
 pub mod id;
-pub mod note;
+pub mod init;
 pub mod list;
+pub mod note;
 pub mod search;
+pub mod template;
