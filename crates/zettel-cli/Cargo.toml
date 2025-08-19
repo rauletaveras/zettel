@@ -1,5 +1,5 @@
 [package]
-name = "zettel-core"
+name = "zettel-cli"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
