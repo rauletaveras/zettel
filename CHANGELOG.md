@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If config options set with default template, `zettel note create` will create the note following the given template.
 - Bidirectional linking with templates: if config options set, child notes generated based on a template with `{{link}}` placeholders will contain a link to the parent note. Similarly, upon creating the child note, if the appropriate config option is set, `note create` will insert a link to the child in the parent note, in a configurable location.
 
+### Changed
+- `zettel list` now lists notes hierarchically ("1, 1a, 1a1, 1b, 2, 2a, 3") rather than simple alphabetically ("1, 10, 100, 2, 20")
+
 ## [0.1.0] - 2025-08-19
 
 ### Added
